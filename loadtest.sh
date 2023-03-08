@@ -14,7 +14,7 @@
 DEFAULT_CONCURRENCIES=(100)
 FILE_TIME_STR=$(date -u +'%Y-%m-%dT%H:%M')
 FIND_PROVS_CSV_OUT_FILE=${FIND_PROVS_CSV_OUT_FILE:-results/results_find_provs_${FILE_TIME_STR}.csv}
-FETCH_CSV_OUT_FILE=${FETCH_CSV_OUT_FILE:-results/results_find_provs_${FILE_TIME_STR}.csv}
+FETCH_CSV_OUT_FILE=${FETCH_CSV_OUT_FILE:-results/results_fetch_${FILE_TIME_STR}.csv}
 
 # Check that we have Node.js installed
 node -v 2>/dev/null || {

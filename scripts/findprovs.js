@@ -54,6 +54,9 @@ function findFromIndexer (cidPath) {
     tags: {
       name: 'IndexerFetchURL',
       timeout: '1m'
+    },
+    headers: {
+      Accept: 'application/x-ndjson'
     }
   })
 
@@ -68,11 +71,7 @@ function findFromIndexer (cidPath) {
       }
       try {
         const obj = JSON.parse(line)
-        obj.MultihashResults.forEach((result) => {
-          result.ProviderResults.forEach((provider) => {
-            providers.push(provider.Provider.ID)
-          })
-        })
+        providers.push(obj.Provider.ID)
       } catch (error) {
         console.log('error parsing results', error)
       }
