@@ -2,10 +2,8 @@ import fs from 'fs/promises'
 import process from 'node:process'
 
 // CSV header line
-const header = [
-  'Protocol',
-  'Scenario',
-  'Concurrency',
+const fetchHeader = [
+  'Service',
   'Latency Avg (ms)',
   'Latency Min (ms)',
   'Latency Med (ms)',
@@ -18,14 +16,21 @@ const header = [
   'Bandwidth (MB/s) Max',
   'Bandwidth (MB/s) P(90)',
   'Bandwidth (MB/s) P(95)',
-  'Success Rate',
-  'Missed WindowPost',
-  'CPU',
-  'Memory'
+  'Success Rate'
 ]
 
+const findProvsHeader = [
+  'Service',
+  'Providers Found Avg',
+  'Providers Found Min',
+  'Providers Found Med',
+  'Providers Found Max',
+  'Providers Found P(90)',
+  'Providers Found P(95)',
+  'Success Rate'
+]
 /**
- * Process a single test JSON file into a row per protocol. This is where the
+ * Process a single test JSON file for fetch into a row per server. This is where the
  * bulk of the processing of the input data happens.
  *
  * @param {string} test the name of the test
@@ -33,65 +38,78 @@ const header = [
  * @param {object} input the test data
  * @returns {(string|number)[][]} an array per protocol
  */
-function processInput (test, name, input) {
-  // extract the various test parameters from the name
-  const params = name.split('_')
-  const vus = parseInt(params.find(p => p.endsWith('vu')).replace('vu', ''), 10)
-  if (test === 'range-requests') {
-    // bytes is only present in range-requests
-    const bytes = parseInt((params.find(p => p.endsWith('B'))).replace('B', ''), 10)
-    test = `${test} ${Math.floor(bytes / 1024 / 1024)} MiB`
-  }
-
-  // for each protocol, extract the relevant data and make an array for a CSV row
-
-  const https = [
-    'HTTPS', // Protocol
-    test, // Scenario
-    vus, // Concurrency
-    input.metrics.ttfb_raw.values.avg, // TTFB Avg (ms)
-    input.metrics.ttfb_raw.values.min, // TTFB Min (ms)
-    input.metrics.ttfb_raw.values.med, // TTFB Med (ms)
-    input.metrics.ttfb_raw.values.max, // TTFB Max (ms)
-    input.metrics.ttfb_raw.values['p(90)'], // TTFB P(90) (ms)
-    input.metrics.ttfb_raw.values['p(95)'], // TTFB P(95) (ms)
-    input.metrics.megabytes_per_second_raw.values.avg, // MB/s Avg
-    input.metrics.megabytes_per_second_raw.values.min, // MB/s Min
-    input.metrics.megabytes_per_second_raw.values.med, // MB/s Med
-    input.metrics.megabytes_per_second_raw.values.max, // MB/s Max
-    input.metrics.megabytes_per_second_raw.values['p(90)'], // MB/s P(90)
-    input.metrics.megabytes_per_second_raw.values['p(95)'], // MB/s P(95)
-    input.metrics.success_raw.values.rate, // Success Rate
-    '', // Missed WindowPost
-    '', // CPU
-    '' // Memory
+function processFetchInput(input) {
+  const kubo = [
+    'Kubo get', // Protocol
+    input.metrics.ttfb_kubo.values.avg, // TTFB Avg (ms)
+    input.metrics.ttfb_kubo.values.min, // TTFB Min (ms)
+    input.metrics.ttfb_kubo.values.med, // TTFB Med (ms)
+    input.metrics.ttfb_kubo.values.max, // TTFB Max (ms)
+    input.metrics.ttfb_kubo.values['p(90)'], // TTFB P(90) (ms)
+    input.metrics.ttfb_kubo.values['p(95)'], // TTFB P(95) (ms)
+    input.metrics.megabytes_per_second_kubo.values.avg, // MB/s Avg
+    input.metrics.megabytes_per_second_kubo.values.min, // MB/s Min
+    input.metrics.megabytes_per_second_kubo.values.med, // MB/s Med
+    input.metrics.megabytes_per_second_kubo.values.max, // MB/s Max
+    input.metrics.megabytes_per_second_kubo.values['p(90)'], // MB/s P(90)
+    input.metrics.megabytes_per_second_kubo.values['p(95)'], // MB/s P(95)
+    input.metrics.success_kubo.values.rate // Success Rate
   ]
 
-  const boost = [
-    'Boost', // Protocol
-    test, // Scenario
-    vus, // VUs
-    input.metrics.ttfb_boost.values.avg, // TTFB Avg
-    input.metrics.ttfb_boost.values.min, // TTFB Min
-    input.metrics.ttfb_boost.values.med, // TTFB Med
-    input.metrics.ttfb_boost.values.max, // TTFB Max
-    input.metrics.ttfb_boost.values['p(90)'], // TTFB P(90)
-    input.metrics.ttfb_boost.values['p(95)'], // TTFB P(95)
-    input.metrics.megabytes_per_second_boost.values.avg, // MB/s Avg
-    input.metrics.megabytes_per_second_boost.values.min, // MB/s Min
-    input.metrics.megabytes_per_second_boost.values.med, // MB/s Med
-    input.metrics.megabytes_per_second_boost.values.max, // MB/s Max
-    input.metrics.megabytes_per_second_boost.values['p(90)'], // MB/s P(90)
-    input.metrics.megabytes_per_second_boost.values['p(95)'], // MB/s P(95)
-    input.metrics.success_boost.values.rate, // Success Rate
-    '', // Missed WindowPost
-    '', // CPU
-    '' // Memory
+  const lassie = [
+    'Lassie Fetch', // Protocol
+    input.metrics.ttfb_lassie.values.avg, // TTFB Avg (ms)
+    input.metrics.ttfb_lassie.values.min, // TTFB Min (ms)
+    input.metrics.ttfb_lassie.values.med, // TTFB Med (ms)
+    input.metrics.ttfb_lassie.values.max, // TTFB Max (ms)
+    input.metrics.ttfb_lassie.values['p(90)'], // TTFB P(90) (ms)
+    input.metrics.ttfb_lassie.values['p(95)'], // TTFB P(95) (ms)
+    input.metrics.megabytes_per_second_lassie.values.avg, // MB/s Avg
+    input.metrics.megabytes_per_second_lassie.values.min, // MB/s Min
+    input.metrics.megabytes_per_second_lassie.values.med, // MB/s Med
+    input.metrics.megabytes_per_second_lassie.values.max, // MB/s Max
+    input.metrics.megabytes_per_second_lassie.values['p(90)'], // MB/s P(90)
+    input.metrics.megabytes_per_second_lassie.values['p(95)'], // MB/s P(95)
+    input.metrics.success_lassie.values.rate // Success Rate
   ]
 
-  return [https, boost]
+  return [kubo, lassie]
 }
 
+/**
+ * Process a single test JSON file for find provs into a row per server. This is where the
+ * bulk of the processing of the input data happens.
+ *
+ * @param {string} test the name of the test
+ * @param {string} name the name of the test data file
+ * @param {object} input the test data
+ * @returns {(string|number)[][]} an array per protocol
+ */
+function processFindProvsInput(input) {
+  const kuboFindProvs = [
+    'Kubo Find Provs', // Protocol
+    input.metrics.provider_rate_kubo.values.avg, // TTFB Avg
+    input.metrics.provider_rate_kubo.values.min, // TTFB Min
+    input.metrics.provider_rate_kubo.values.med, // TTFB Med
+    input.metrics.provider_rate_kubo.values.max, // TTFB Max
+    input.metrics.provider_rate_kubo.values['p(90)'], // TTFB P(90)
+    input.metrics.provider_rate_kubo.values['p(95)'], // TTFB P(95)
+    input.metrics.success_kubo.values.rate // Success Rate
+  ]
+
+  const indexerFindProvs = [
+    'Indexer Query', // Protocol
+    input.metrics.provider_rate_indexer.values.avg, // TTFB Avg
+    input.metrics.provider_rate_indexer.values.min, // TTFB Min
+    input.metrics.provider_rate_indexer.values.med, // TTFB Med
+    input.metrics.provider_rate_indexer.values.max, // TTFB Max
+    input.metrics.provider_rate_indexer.values['p(90)'], // TTFB P(90)
+    input.metrics.provider_rate_indexer.values['p(95)'], // TTFB P(95)
+    input.metrics.success_indexer.values.rate // Success Rate
+  ]
+
+  return [kuboFindProvs, indexerFindProvs]
+}
 /**
  * Turn an array into a line of CSV data. Currently this doesn't need to do
  * anything fancy but quoting or escaping may be required as the data evolves.
@@ -102,7 +120,7 @@ function processInput (test, name, input) {
  * @param {any[]} data
  * @returns {string}
  */
-function toCSV (data) {
+function toCSV(data) {
   return data.join(',')
 }
 
@@ -116,7 +134,7 @@ function toCSV (data) {
  * @param {{name: string}} b
  * @returns {number}
  */
-function filenameSort (a, b) {
+function filenameSort(a, b) {
   // extract the VU from the start of the filename, then optionally the
   // byte size as the second element
   const valuesFromname = (name) => {
@@ -136,31 +154,35 @@ function filenameSort (a, b) {
  * The main entry point for the script. This reads all the JSON files from the
  * `out` directory and transforms them into a single CSV file.
  */
-async function run () {
+async function run() {
   // ingest all the JSON data into a single array
-  let data = [header]
   const outDir = new URL('../out/', import.meta.url)
   for (const dir of await fs.readdir(outDir, { withFileTypes: true })) {
     const test = dir.name
     if (!dir.isDirectory()) {
       continue
     }
+
+    const header = test === 'find provs' ? findProvsHeader : fetchHeader
+    let data = [header]
     const root = new URL(`./${test}/`, outDir)
     let files = await fs.readdir(root, { withFileTypes: true })
     // sort the files so they end up in our output in a nice order
     files = files.filter((f) => f.isFile()).sort(filenameSort)
+    const processInput = test === 'find provs' ? processFindProvsInput : processFetchInput
     for (const file of files) {
       const name = file.name.replace(/\.json$/)
       const input = JSON.parse(await fs.readFile(new URL(file.name, root)))
-      data = data.concat(processInput(test, name, input))
+      data = data.concat(processInput(input))
     }
+    // transform the data into CSV
+    const contents = data.map(toCSV).join('\n') + '\n'
+    const out = test === 'find provs'
+      ? process.argv[2] || new URL('../results/results_find_provs.csv', import.meta.url).pathname
+      : process.argv[3] || new URL('../results/results_fetch.csv', import.meta.url).pathname
+    await fs.writeFile(out, contents, 'utf8')
+    console.log('Wrote stats CSV to', out)
   }
-
-  // transform the data into CSV
-  const contents = data.map(toCSV).join('\n') + '\n'
-  const out = process.argv[2] || new URL('../results/results.csv', import.meta.url).pathname
-  await fs.writeFile(out, contents, 'utf8')
-  console.log('Wrote stats CSV to', out)
 }
 
 run().catch(console.error)

@@ -1,5 +1,5 @@
 .env
-/pieces.txt
+/latest.json
 .vscode
 Dockerfile.custom
 *.crt
