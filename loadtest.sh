@@ -15,6 +15,8 @@ DEFAULT_CONCURRENCIES=(100)
 FILE_TIME_STR=$(date -u +'%Y-%m-%dT%H:%M')
 FIND_PROVS_CSV_OUT_FILE=${FIND_PROVS_CSV_OUT_FILE:-results/results_find_provs_${FILE_TIME_STR}.csv}
 FETCH_CSV_OUT_FILE=${FETCH_CSV_OUT_FILE:-results/results_fetch_${FILE_TIME_STR}.csv}
+MISSING_CIDS_FILE=${MISSING_CIDS_FILE:-results/missing_cids_${FILE_TIME_STR}.csv}
+LASSIE_DISCREPENCIES_FILE=${LASSIE_DISCREPENCIES_FILE:-results/lassie-discrepencies-${FILE_TIME_STR}.csv}
 
 # Check that we have Node.js installed
 node -v 2>/dev/null || {
@@ -43,6 +45,7 @@ function run_find_provs() {
         TEST_NAME=$TEST_NAME \
         SIMULTANEOUS_DOWNLOADS=$CONCURRENCY \
         OUT_DIR="./out" \
+        MISSING_CIDS_FILE=$MISSING_CIDS_FILE \
         FILE_TIME_STR=$FILE_TIME_STR \
         ./k6 run ./scripts/findprovs.js
   done
@@ -69,6 +72,7 @@ function run_fetch() {
         TEST_NAME=$TEST_NAME \
         SIMULTANEOUS_DOWNLOADS=$CONCURRENCY \
         OUT_DIR="./out" \
+        LASSIE_DISCREPENCIES_FILE=$LASSIE_DISCREPENCIES_FILE \
         FILE_TIME_STR=$FILE_TIME_STR \
         ./k6 run ./scripts/script.js
   done
@@ -77,11 +81,15 @@ function run_fetch() {
 rm -rf out
 mkdir -p out
 mkdir -p results
-docker compose up -d influxdb grafana
+[[ -z "${SKIP_SERVICES_START}" ]] && docker compose up -d influxdb grafana
 
-curl https://orchestrator.strn.pl/top-cids > latest.json
 [[ -z "${SKIP_FIND_PROVS}" ]] && run_find_provs
 [[ -z "${SKIP_FETCH}" ]] && run_fetch
 
 # Generate CSV output from the JSON files
-[[ -z "${SKIP_CSV_OUT}" ]] && node scripts/json2csv.mjs $FIND_PROVS_CSV_OUT_FILE $FETCH_CSV_OUT_FILE
+source .env
+[[ -z "${SKIP_CSV_OUT}" ]] && KUBO_GATEWAY_URL=${KUBO_GATEWAY_URL} \
+        LASSIE_FETCH_URL=${LASSIE_FETCH_URL} \
+        KUBO_API_BASE=${KUBO_API_BASE} \
+        INDEXER_API_BASE=${INDEXER_API_BASE} \
+        node scripts/json2csv.mjs $FIND_PROVS_CSV_OUT_FILE $FETCH_CSV_OUT_FILE

@@ -6,6 +6,7 @@ import { Rate, Trend } from 'k6/metrics'
 import exec from 'k6/execution'
 import { hash } from 'k6/x/cid'
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.3/index.js'
+import file from 'k6/x/file'
 
 const kuboSuccess = new Rate('success_kubo')
 const kuboProviderRate = new Trend('provider_rate_kubo', false)
@@ -15,6 +16,12 @@ const indexerProviderRate = new Trend('provider_rate_indexer', false)
 const saturnCids = new SharedArray('saturnCids', function () {
   return JSON.parse(open('../latest.json'))
 })
+
+export function setup() {
+  if (__ENV.MISSING_CIDS_FILE) {
+    file.writeString(__ENV.MISSING_CIDS_FILE, 'CID,PeerIDs\n')
+  }
+}
 
 export const options = {
   scenarios: {
@@ -33,13 +40,28 @@ export default function () {
   // randomly fetch first from either a raw url or boost
   const findKuboFirst = Math.random() >= 0.5
 
+  let kuboResponse, indexerResponse
   if (findKuboFirst) {
-    findFromKubo(cidPath)
-    findFromIndexer(cidPath)
+    kuboResponse = findFromKubo(cidPath)
+    indexerResponse = findFromIndexer(cidPath)
   } else {
-    findFromIndexer(cidPath)
-    findFromKubo(cidPath)
+    indexerResponse = findFromIndexer(cidPath)
+    kuboResponse = findFromKubo(cidPath)
   }
+  if (__ENV.KUBO_API_BASE && __ENV.MISSING_CIDS_FILE) {
+    if (success(kuboResponse.response) && !success(indexerResponse.response) && kuboResponse.unique && kuboResponse.unique.length > 0) {
+      let outputString = cidPath.split('/')[0] + ',"'
+      kuboResponse.unique.forEach((peerID) => {
+        outputString += peerID + ','
+      })
+      outputString += '"\n'
+      file.appendString(__ENV.MISSING_CIDS_FILE, outputString)
+    }
+  }
+}
+
+function success(response) {
+  return response.status >= 200 && response.status < 300
 }
 
 /**
@@ -47,10 +69,10 @@ export default function () {
  * @param {string} piece The piece CID string to fetch
  * @returns A K6 HTTP response from the BOOST_FETCH_URL (https://k6.io/docs/javascript-api/k6-http/response/)
  */
-function findFromIndexer (cidPath) {
+function findFromIndexer(cidPath) {
   const cid = cidPath.split('/')[0]
   const hashResult = hash(cid)
-  const response = http.get(`${__ENV.INDEXER_API_BASE}/multihash/${hashResult}?cascade=ipfs-dht`, {
+  const response = http.get(`${__ENV.INDEXER_API_BASE}/multihash/${hashResult}?cascade=ipfs-dht&cascade=legacy`, {
     tags: {
       name: 'IndexerFetchURL',
       timeout: '1m'
@@ -59,10 +81,9 @@ function findFromIndexer (cidPath) {
       Accept: 'application/x-ndjson'
     }
   })
-
-  indexerSuccess.add(response.status >= 200 && response.status < 300)
-
-  if (response.status >= 200 || response.status < 300) {
+  indexerSuccess.add(success(response))
+  let unique
+  if (success(response)) {
     const lines = response.body.split('\n')
     const providers = []
     lines.forEach((line) => {
@@ -76,10 +97,10 @@ function findFromIndexer (cidPath) {
         console.log('error parsing results', error)
       }
     })
-    const unique = [...new Set(providers)]
+    unique = [...new Set(providers)]
     indexerProviderRate.add(unique.length)
   }
-  return response
+  return { response, unique }
 }
 
 /**
@@ -87,7 +108,7 @@ function findFromIndexer (cidPath) {
  * @param {string} piece The piece CID string to fetch
  * @returns A K6 HTTP response from the RAW_FETCH_URL (https://k6.io/docs/javascript-api/k6-http/response/)
  */
-function findFromKubo (cidPath) {
+function findFromKubo(cidPath) {
   const cid = cidPath.split('/')[0]
   if (__ENV.KUBO_API_BASE) {
     const response = http.post(`${__ENV.KUBO_API_BASE}/api/v0/dht/findprovs/${cid}?num-providers=20`, {
@@ -97,9 +118,8 @@ function findFromKubo (cidPath) {
       timeout: '1m'
     })
 
-    kuboSuccess.add(response.status >= 200 && response.status < 300)
-
-    if (response.status >= 200 || response.status < 300) {
+    let unique
+    if (success(response)) {
       const lines = response.body.split('\n')
       const providers = []
       lines.forEach((line) => {
@@ -117,10 +137,13 @@ function findFromKubo (cidPath) {
           console.log('error parsing results', error)
         }
       })
-      const unique = [...new Set(providers)]
+      unique = [...new Set(providers)]
       kuboProviderRate.add(unique.length)
     }
-    return response
+
+    kuboSuccess.add(success(response) && unique && unique.length > 0)
+
+    return { response, unique }
   }
 }
 
@@ -128,7 +151,7 @@ function findFromKubo (cidPath) {
  * Defines a custom K6 summary output configuration.
  * Configuration changes based on test name.
  */
-export function handleSummary (data) {
+export function handleSummary(data) {
   const timeStr = __ENV.FILE_TIME_STR || new Date().toISOString()
   const dir = __ENV.OUT_DIR
   const name = __ENV.TEST_NAME

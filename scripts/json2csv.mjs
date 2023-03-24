@@ -38,24 +38,28 @@ const findProvsHeader = [
  * @param {object} input the test data
  * @returns {(string|number)[][]} an array per protocol
  */
-function processFetchInput(input) {
-  const kubo = [
-    'Kubo get', // Protocol
-    input.metrics.ttfb_kubo.values.avg, // TTFB Avg (ms)
-    input.metrics.ttfb_kubo.values.min, // TTFB Min (ms)
-    input.metrics.ttfb_kubo.values.med, // TTFB Med (ms)
-    input.metrics.ttfb_kubo.values.max, // TTFB Max (ms)
-    input.metrics.ttfb_kubo.values['p(90)'], // TTFB P(90) (ms)
-    input.metrics.ttfb_kubo.values['p(95)'], // TTFB P(95) (ms)
-    input.metrics.megabytes_per_second_kubo.values.avg, // MB/s Avg
-    input.metrics.megabytes_per_second_kubo.values.min, // MB/s Min
-    input.metrics.megabytes_per_second_kubo.values.med, // MB/s Med
-    input.metrics.megabytes_per_second_kubo.values.max, // MB/s Max
-    input.metrics.megabytes_per_second_kubo.values['p(90)'], // MB/s P(90)
-    input.metrics.megabytes_per_second_kubo.values['p(95)'], // MB/s P(95)
-    input.metrics.success_kubo.values.rate // Success Rate
-  ]
+function processFetchInput (input) {
+  const providers = []
 
+  if (process.env.KUBO_GATEWAY_URL) {
+    const kubo = [
+      'Kubo get', // Protocol
+      input.metrics.ttfb_kubo.values.avg, // TTFB Avg (ms)
+      input.metrics.ttfb_kubo.values.min, // TTFB Min (ms)
+      input.metrics.ttfb_kubo.values.med, // TTFB Med (ms)
+      input.metrics.ttfb_kubo.values.max, // TTFB Max (ms)
+      input.metrics.ttfb_kubo.values['p(90)'], // TTFB P(90) (ms)
+      input.metrics.ttfb_kubo.values['p(95)'], // TTFB P(95) (ms)
+      input.metrics.megabytes_per_second_kubo.values.avg, // MB/s Avg
+      input.metrics.megabytes_per_second_kubo.values.min, // MB/s Min
+      input.metrics.megabytes_per_second_kubo.values.med, // MB/s Med
+      input.metrics.megabytes_per_second_kubo.values.max, // MB/s Max
+      input.metrics.megabytes_per_second_kubo.values['p(90)'], // MB/s P(90)
+      input.metrics.megabytes_per_second_kubo.values['p(95)'], // MB/s P(95)
+      input.metrics.success_kubo.values.rate // Success Rate
+    ]
+    providers.push(kubo)
+  }
   const lassie = [
     'Lassie Fetch', // Protocol
     input.metrics.ttfb_lassie.values.avg, // TTFB Avg (ms)
@@ -72,8 +76,8 @@ function processFetchInput(input) {
     input.metrics.megabytes_per_second_lassie.values['p(95)'], // MB/s P(95)
     input.metrics.success_lassie.values.rate // Success Rate
   ]
-
-  return [kubo, lassie]
+  providers.push(lassie)
+  return providers
 }
 
 /**
@@ -85,18 +89,22 @@ function processFetchInput(input) {
  * @param {object} input the test data
  * @returns {(string|number)[][]} an array per protocol
  */
-function processFindProvsInput(input) {
-  const kuboFindProvs = [
-    'Kubo Find Provs', // Protocol
-    input.metrics.provider_rate_kubo.values.avg, // TTFB Avg
-    input.metrics.provider_rate_kubo.values.min, // TTFB Min
-    input.metrics.provider_rate_kubo.values.med, // TTFB Med
-    input.metrics.provider_rate_kubo.values.max, // TTFB Max
-    input.metrics.provider_rate_kubo.values['p(90)'], // TTFB P(90)
-    input.metrics.provider_rate_kubo.values['p(95)'], // TTFB P(95)
-    input.metrics.success_kubo.values.rate // Success Rate
-  ]
+function processFindProvsInput (input) {
+  const providers = []
 
+  if (process.env.KUBO_API_BASE) {
+    const kuboFindProvs = [
+      'Kubo Find Provs', // Protocol
+      input.metrics.provider_rate_kubo.values.avg, // TTFB Avg
+      input.metrics.provider_rate_kubo.values.min, // TTFB Min
+      input.metrics.provider_rate_kubo.values.med, // TTFB Med
+      input.metrics.provider_rate_kubo.values.max, // TTFB Max
+      input.metrics.provider_rate_kubo.values['p(90)'], // TTFB P(90)
+      input.metrics.provider_rate_kubo.values['p(95)'], // TTFB P(95)
+      input.metrics.success_kubo.values.rate // Success Rate
+    ]
+    providers.push(kuboFindProvs)
+  }
   const indexerFindProvs = [
     'Indexer Query', // Protocol
     input.metrics.provider_rate_indexer.values.avg, // TTFB Avg
@@ -107,8 +115,8 @@ function processFindProvsInput(input) {
     input.metrics.provider_rate_indexer.values['p(95)'], // TTFB P(95)
     input.metrics.success_indexer.values.rate // Success Rate
   ]
-
-  return [kuboFindProvs, indexerFindProvs]
+  providers.push(indexerFindProvs)
+  return providers
 }
 /**
  * Turn an array into a line of CSV data. Currently this doesn't need to do
@@ -120,7 +128,7 @@ function processFindProvsInput(input) {
  * @param {any[]} data
  * @returns {string}
  */
-function toCSV(data) {
+function toCSV (data) {
   return data.join(',')
 }
 
@@ -134,7 +142,7 @@ function toCSV(data) {
  * @param {{name: string}} b
  * @returns {number}
  */
-function filenameSort(a, b) {
+function filenameSort (a, b) {
   // extract the VU from the start of the filename, then optionally the
   // byte size as the second element
   const valuesFromname = (name) => {
@@ -154,7 +162,7 @@ function filenameSort(a, b) {
  * The main entry point for the script. This reads all the JSON files from the
  * `out` directory and transforms them into a single CSV file.
  */
-async function run() {
+async function run () {
   // ingest all the JSON data into a single array
   const outDir = new URL('../out/', import.meta.url)
   for (const dir of await fs.readdir(outDir, { withFileTypes: true })) {

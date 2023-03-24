@@ -5,10 +5,17 @@ import { SharedArray } from 'k6/data'
 import { Trend, Rate, Counter } from 'k6/metrics'
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.3/index.js'
 import exec from 'k6/execution'
+import file from 'k6/x/file'
 
 const saturnCids = new SharedArray('saturnCids', function () {
   return [...new Set(JSON.parse(open('../latest.json')))]
 })
+
+export function setup () {
+  if (__ENV.LASSIE_DISCREPENCIES_FILE) {
+    file.writeString(__ENV.LASSIE_DISCREPENCIES_FILE, 'CID\n')
+  }
+}
 
 const megabytesPerSecLassie = new Trend('megabytes_per_second_lassie')
 const megabytesPerSecKubo = new Trend('megabytes_per_second_kubo')
@@ -51,6 +58,9 @@ export default function () {
   if (__ENV.KUBO_GATEWAY_URL) {
     timeDelta.add(lassieResponse.timings.duration - kuboResponse.timings.duration)
     ttfbDelta.add(lassieResponse.timings.waiting - kuboResponse.timings.waiting)
+    if (success(kuboResponse) && !success(lassieResponse)) {
+      file.appendString(__ENV.LASSIE_DISCREPENCIES_FILE, cidPath + '\n')
+    }
   }
 }
 
@@ -67,9 +77,9 @@ function fetchLassie (cidPath) {
   })
   timeLassie.add(response.timings.duration)
   ttfbLassie.add(response.timings.waiting)
-  lassieSuccess.add(response.status >= 200 && response.status < 300)
+  lassieSuccess.add(success(response))
 
-  if (response.status >= 200 && response.status < 300) {
+  if (success(response)) {
     const contentLength = response.body.length
     if (contentLength && !Number.isNaN(contentLength)) {
       dataReceivedLassie.add(contentLength, { url: response.url })
@@ -81,6 +91,10 @@ function fetchLassie (cidPath) {
   }
 
   return response
+}
+
+function success (response) {
+  return response.status >= 200 && response.status < 300
 }
 
 /**
@@ -97,9 +111,9 @@ function fetchKubo (cidPath) {
     })
     timeKubo.add(response.timings.duration)
     ttfbKubo.add(response.timings.waiting)
-    kuboSuccess.add(response.status >= 200 && response.status < 300)
+    kuboSuccess.add(success(response))
 
-    if (response.status >= 200 && response.status < 300) {
+    if (success(response)) {
       const contentLength = response.body.length
       if (contentLength && !Number.isNaN(contentLength)) {
         dataReceivedKubo.add(contentLength, { url: response.url })
