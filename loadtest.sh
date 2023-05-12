@@ -10,7 +10,7 @@
 ##   * SKIP_CSV_OUT=1 to skip the CSV output generation
 ##   * FIND_PROVS_CSV_OUT_FILE='path/to/file.csv' to override the default CSV output file for find providers test
 ##   * FETCH_CSV_OUT_FILE='path/to/file.csv' to override the default CSV output file for fetch test
-
+CUSTOM_K6='./k6'
 DEFAULT_CONCURRENCIES=(100)
 FILE_TIME_STR=$(date -u +'%Y-%m-%dT%H:%M')
 FIND_PROVS_CSV_OUT_FILE=${FIND_PROVS_CSV_OUT_FILE:-results/results_find_provs_${FILE_TIME_STR}.csv}
@@ -47,7 +47,7 @@ function run_find_provs() {
         OUT_DIR="./out" \
         MISSING_CIDS_FILE=$MISSING_CIDS_FILE \
         FILE_TIME_STR=$FILE_TIME_STR \
-        ./k6 run ./scripts/findprovs.js
+        ${CUSTOM_K6} run ./scripts/findprovs.js
   done
 }
 
@@ -74,13 +74,21 @@ function run_fetch() {
         OUT_DIR="./out" \
         LASSIE_DISCREPENCIES_FILE=$LASSIE_DISCREPENCIES_FILE \
         FILE_TIME_STR=$FILE_TIME_STR \
-        ./k6 run ./scripts/script.js
+        ${CUSTOM_K6} run ./scripts/script.js
   done
 }
 
 rm -rf out
 mkdir -p out
 mkdir -p results
+
+if [ -f "$CUSTOM_K6" ]; then
+    echo "$CUSTOM_K6 already built."
+else
+  go install go.k6.io/xk6/cmd/xk6@latest
+  xk6 build --with xk6-cid=$(pwd)/cid --with github.com/avitalique/xk6-file
+fi
+
 [[ -z "${SKIP_SERVICES_START}" ]] && docker compose up -d influxdb grafana
 
 [[ -z "${SKIP_FIND_PROVS}" ]] && run_find_provs

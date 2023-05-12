@@ -5,3 +5,4 @@ Dockerfile.custom
 *.crt
 /out
 /results
+k6
