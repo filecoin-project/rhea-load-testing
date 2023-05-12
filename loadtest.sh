@@ -89,6 +89,8 @@ else
   xk6 build --with xk6-cid=$(pwd)/cid --with github.com/avitalique/xk6-file
 fi
 
+curl https://orchestrator.strn.pl/top-cids > latest.json
+
 [[ -z "${SKIP_SERVICES_START}" ]] && docker compose up -d influxdb grafana
 
 [[ -z "${SKIP_FIND_PROVS}" ]] && run_find_provs
